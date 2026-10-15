@@ -154,6 +154,8 @@ UPROGS=\
 	$U/_find\
 	$U/_xargs\
 	$U/_ps\
+	$U/_trace\
+	$U/_sysinfotest\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)

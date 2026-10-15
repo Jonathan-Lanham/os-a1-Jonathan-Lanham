@@ -5,6 +5,7 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "uproc.h"
 
 struct cpu cpus[NCPU];
 
@@ -168,6 +169,7 @@ freeproc(struct proc *p)
   p->killed = 0;
   p->xstate = 0;
   p->state = UNUSED;
+  p->trace_mask = 0;
 }
 
 // Create a user page table for a given process, with no user memory,
@@ -299,6 +301,8 @@ kfork(void)
 
   acquire(&np->lock);
   np->state = RUNNABLE;
+
+  np->trace_mask = p->trace_mask;
   release(&np->lock);
 
   return pid;
@@ -700,4 +704,61 @@ procdump(void)
     printk("%d %s %s", p->pid, state, p->name);
     printk("\n");
   }
+}
+
+uint64
+getproccessesnum()
+{
+  struct proc *p;
+  uint64 num = 0;
+
+  for(p = proc; p < &proc[NPROC]; p++) {
+    if(p->state != UNUSED)
+      num++;
+  }
+
+  return num;
+}
+
+int
+getprocs(uint64 addr, int max)
+{
+  struct proc *p;
+  struct uproc u;
+  int count = 0;
+
+  if(max < 0)
+    return -1;
+
+  acquire(&wait_lock);
+
+  for(p = proc; p < &proc[NPROC] && count < max; p++){
+    acquire(&p->lock);
+
+    if(p->state != UNUSED){
+      u.pid = p->pid;
+      u.ppid = p->parent ? p->parent->pid : 0;
+      u.state = p->state;
+      u.sz = p->sz;
+      safestrcpy(u.name, p->name, sizeof(u.name));
+
+      release(&p->lock);
+      release(&wait_lock);
+
+    if(copyout(myproc()->pagetable, myproc()->sz,
+                 addr + count * sizeof(u),
+                 (char *)&u, sizeof(u)) < 0)
+        return -1;
+
+       count++;
+
+      acquire(&wait_lock);
+     } else {
+       release(&p->lock);
+      }
+     }
+
+  release(&wait_lock);
+
+  return count;
 }
